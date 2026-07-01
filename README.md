@@ -1,3 +1,34 @@
+Retro-Go XiaoMiao Port
+==
+***包含AI生成代码***
+
+鸣谢
+-
+https://github.com/longxiangam/retro-go
+
+https://github.com/pysn2012/xueersi-xiaomiao
+
+将字体数据改为独立分区，防止每个app都加一遍字体数据。
+
+默认按键配置
+-
+添加了两个按键：
+IO1(GPIO33) to GND ：START
+IO2(GPIO32) to GND ：SELECT
+
+A + START ：MENU
+A + SELECT ：OPTION
+
+Build
+-
+```
+./rg_tool.py --target=esp32-xiaomiao build-img
+```
+esp-idf v5.2.3编译通过。
+
+
+
+
 # Table of contents
 - [Description](#description)
 - [Installation](#installation)
