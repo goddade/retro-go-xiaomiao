@@ -11,6 +11,47 @@
 #include "bitmaps/image_hourglass.h"
 #include "fonts/fonts.h"
 
+#ifdef ESP_PLATFORM
+#include <esp_partition.h>
+#include <spi_flash_mmap.h>
+#endif
+
+static rg_font_t *part_font_fusion = NULL;
+
+static bool rg_font_init_partition(void)
+{
+#ifdef ESP_PLATFORM
+	const void *mapped;
+	spi_flash_mmap_handle_t handle;
+	const esp_partition_t *font_part = esp_partition_find_first(
+        ESP_PARTITION_TYPE_DATA, 0x42, "font");
+    
+	if (!font_part)
+    {
+        RG_LOGE("Font partition not found!");
+        return false;
+    }
+	
+	esp_err_t ret = esp_partition_mmap(
+		font_part,
+    	0,
+    	font_part->size,
+    	SPI_FLASH_MMAP_DATA,
+    	&mapped,
+    	&handle
+	);
+    if (ret != ESP_OK)
+    {
+        RG_LOGE("Font partition mmap failed: %d", ret);
+        return false;
+    }
+	part_font_fusion = (rg_font_t *)mapped;
+    return true;
+#else
+    return false;
+#endif
+}
+
 static struct
 {
     uint16_t *screen_buffer, *draw_buffer;
@@ -112,12 +153,17 @@ static void gui_update_geometry(void)
 
 void rg_gui_init(void)
 {
+    rg_font_init_partition();
     gui_update_geometry();
     gui.show_clock = rg_settings_get_boolean(NS_GLOBAL, SETTING_CLOCK, false);
     if (!rg_gui_set_language_id(rg_settings_get_number(NS_GLOBAL, SETTING_LANGUAGE, RG_LANG_DEFAULT)))
         rg_gui_set_language_id(0);
-    if (!rg_gui_set_font(rg_settings_get_number(NS_GLOBAL, SETTING_FONTTYPE, RG_FONT_DEFAULT)))
-        rg_gui_set_font(0);
+    if (rg_localization_get_language_id() == RG_LANG_ZH){
+        rg_gui_set_font(RG_FONT_FUSION_12);
+    }else{
+        if (!rg_gui_set_font(rg_settings_get_number(NS_GLOBAL, SETTING_FONTTYPE, RG_FONT_DEFAULT)))
+            rg_gui_set_font(0);
+    }
     rg_gui_set_theme(rg_settings_get_string(NS_GLOBAL, SETTING_THEME, NULL));
     gui.initialized = true;
 }
@@ -230,10 +276,15 @@ const char *rg_gui_get_theme_name(void)
 
 bool rg_gui_set_font(int index)
 {
-    if (index < 0 || index > RG_FONT_MAX - 1)
-        return false;
+    if (index == RG_FONT_FUSION_12)
+    {
+       if(!part_font_fusion) return false;
+       gui.font = part_font_fusion;
+    }else{
+        if (index < 0 || index > RG_FONT_MAX - 1) return false;
+        gui.font = fonts[index];
+    }
 
-    gui.font = fonts[index];
     gui.font_index = index;
     gui.font_height = (index < 3) ? (8 + index * 4) : gui.font->height;
 
@@ -309,13 +360,37 @@ static size_t get_glyph(uint32_t *output, const rg_font_t *font, int points, int
 
     const uint8_t *ptr = font->data;
     const rg_font_glyph_t *glyph = (rg_font_glyph_t *)ptr;
-    // for (size_t i = 0; i < font->chars && glyph->code && glyph->code != c; ++i)
-    while (glyph->code && glyph->code != c)
+    if(font->type == 2){
+        if (c < font->map_start_code)
+        {
+            int times =0;
+            while (glyph->code && glyph->code != c && times++ <=2048)
+            {
+                if (glyph->width != 0)
+                    ptr += (((glyph->width * glyph->height) - 1) / 8) + 1;
+                ptr += sizeof(rg_font_glyph_t);
+                glyph = (rg_font_glyph_t *)ptr;
+            }
+        }else if(c >= font->map_start_code){
+            uint32_t map_index =  c - font->map_start_code;
+            if (map_index < font->map_len)
+            {
+                const uint32_t *map = (const uint32_t *)(ptr + (intptr_t)font->map);
+                uint32_t data_index = map[map_index];
+                glyph = (rg_font_glyph_t *)(ptr + data_index);
+            }
+        }
+    }
+    else
     {
-        if (glyph->width != 0)
-            ptr += (((glyph->width * glyph->height) - 1) / 8) + 1;
-        ptr += sizeof(rg_font_glyph_t);
-        glyph = (rg_font_glyph_t *)ptr;
+        // for (size_t i = 0; i < font->chars && glyph->code && glyph->code != c; ++i)
+        while (glyph->code && glyph->code != c)
+        {
+            if (glyph->width != 0)
+                ptr += (((glyph->width * glyph->height) - 1) / 8) + 1;
+            ptr += sizeof(rg_font_glyph_t);
+            glyph = (rg_font_glyph_t *)ptr;
+        }
     }
 
     if (glyph && glyph->code == c) // Glyph found

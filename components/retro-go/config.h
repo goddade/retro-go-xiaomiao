@@ -32,6 +32,8 @@
 #include "targets/crokpocket/config.h"
 #elif defined(RG_TARGET_REDROID_GO)
 #include "targets/redroid-go/config.h"
+#elif defined(RG_TARGET_ESP32_XIAOMIAO)
+#include "targets/esp32-xiaomiao/config.h"
 #else
 #warning "No target defined. Defaulting to ODROID-GO."
 #include "targets/odroid-go/config.h"
@@ -164,9 +166,11 @@
 #endif
 
 #ifndef RG_LANG_DEFAULT
+#error "no lang default"
 #define RG_LANG_DEFAULT RG_LANG_EN
 #endif
 
 #ifndef RG_FONT_DEFAULT
+#error "no font default"
 #define RG_FONT_DEFAULT RG_FONT_VERA_11
 #endif

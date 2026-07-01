@@ -64,6 +64,9 @@ typedef struct
     uint8_t width;  // median width of glyphs
     uint8_t height; // height of tallest glyph
     size_t  chars;  // glyph count
+    const uint32_t *map;
+    uint32_t map_len;
+    uint32_t map_start_code;
     uint8_t data[]; // stream of rg_font_glyph_t (end of list indicated by an entry with 0x0000 codepoint)
 } rg_font_t;
 

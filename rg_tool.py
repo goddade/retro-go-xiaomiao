@@ -69,8 +69,25 @@ def run(cmd, cwd=None, check=True):
     return subprocess.run(cmd, shell=False, cwd=cwd, check=check)
 
 
+FONT_BIN = "build/font.bin"
+FONT_SRC = "fonts/FusionPixel12.c"
+
+
+def build_font_bin():
+    if not os.path.exists(FONT_SRC):
+        return
+    if os.path.exists(FONT_BIN) and os.path.getmtime(FONT_BIN) >= os.path.getmtime(FONT_SRC):
+        return
+    os.makedirs("build", exist_ok=True)
+    print("Generating font binary...")
+    run([sys.executable, "tools/font_to_bin.py", FONT_SRC, FONT_BIN])
+
+
 def build_image(apps, output_file, img_type="odroid", fatsize=0, target="unknown", version="unknown"):
     print("Building firmware image with: %s\n" % " ".join(apps))
+
+    build_font_bin()
+
     args = [MKFW_PY, "--type", img_type, "--name", PROJECT_NAME, "--icon", PROJECT_ICON, "--version", PROJECT_VER]
 
     if img_type not in ["odroid", "esplay"]:
@@ -81,6 +98,11 @@ def build_image(apps, output_file, img_type="odroid", fatsize=0, target="unknown
         args += ["--target", target, "--bootloader", bootloader_file]
 
     args += [output_file]
+
+    if img_type not in ["odroid", "esplay"] and os.path.exists(FONT_BIN):
+        font_size = os.path.getsize(FONT_BIN)
+        font_size_aligned = math.ceil(font_size / 4096) * 4096
+        args += ["1", "0x42", str(font_size_aligned), "font", FONT_BIN]
 
     ota_next_id = 16
     for app in apps:
